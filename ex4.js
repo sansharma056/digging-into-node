@@ -49,17 +49,93 @@ async function main() {
 	};
 
 	var initSQL = fs.readFileSync(DB_SQL_PATH,"utf-8");
-	// TODO: initialize the DB structure
-
+	await SQL3.exec(initSQL);
 
 	var other = args.other;
 	var something = Math.trunc(Math.random() * 1E9);
 
 	// ***********
-
-	// TODO: insert values and print all records
+	
+	var otherID =	await insertOrLookupOther(other);
+	if(otherID) {
+		let result = insertSomething(otherID, something);
+		if(result) {
+			var records = await getAllRecords();
+			if(records && records.length > 0) {
+				console.table(records);
+				return;
+			}
+		}
+	}	
 
 	error("Oops!");
+}
+
+async function insertSomething(otherID, something) {
+	var result = await SQL3.run(
+		`
+			INSERT INTO
+				Something (otherID, data)
+			VALUES
+				(?, ?)
+		`,
+		otherID, something
+	);
+
+	return (result && result.changes > 0) ? true : false;
+}
+
+async function insertOrLookupOther(other) {
+	var result = await SQL3.get(
+		`
+			SELECT 
+				id
+			FROM
+				Other
+			WHERE
+				data = ?
+		`,
+		other
+	);
+
+	if(result && result.id) {
+		return result.id;
+	}
+	
+	result = await SQL3.run(
+		`
+			INSERT INTO
+				Other (data)
+			VALUES
+				(?)
+		`,
+		other
+	);
+
+	if(result && result.lastID) {
+		return result.lastID;
+	}
+
+}
+
+async function getAllRecords() {
+	var result = await SQL3.all(
+		`
+			SELECT
+				Other.data AS 'Other',
+				Something.data as 'Something'
+
+			FROM
+				Something JOIN OTHER
+				ON (Something.otherID = Other.id)
+			ORDER BY
+				Other.id DESC, Something.data ASC
+		`	
+	);
+
+	if(result && result.length > 0) {
+		return result;
+	}
 }
 
 function error(err) {
